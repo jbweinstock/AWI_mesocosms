@@ -135,62 +135,18 @@ chl_all_long$rep_treatment = paste(chl_all_long$replicate, chl_all_long$treatmen
 
 ## Bloom summary stats... total chl + cumulative total + bloom end
 
-chl_all_long$chl_total = NA
-chl_all_long$chl_cumsum = NA
+# bloom end date
+
 chl_all_long$delta_chl = NA
 chl_all_long$over = NA
 chl_series = split(chl_all_long,chl_all_long$rep_treatment)
 
 for(i in 1:length(chl_series)){ #for each replicate in each treatment...
-  nn = length(chl_series[[i]]$chl_a) #check the length of the series
-  if(nn %% 2 == 0){ #if length is even, then shave off last point
-    n = nn-2
-    
-    ss = (chl_series[[i]]$chl_a[nn-1] + chl_series[[i]]$chl_a[chl_series[[i]]$chl_a[nn]]) / 2
-    
-    chl_series[[i]]$chl_total[nn-1] = ss
-    }
-  else if(nn %% 2 != 0){ #if length is odd, include it all
-    n = nn-1
-  }
-  
-  h=1 # defaulting to Simpson's 1/3 rule
-  xValues = seq(from=1, to=n, by=2) #step size of 2
-  
-  data_series = na.approx(chl_series[[i]]$chl_a, na.rm = FALSE) #interpolate NA's
-  
-  for(q in 1:length(xValues)){
-    n_sub <- xValues[[q]]-1
-    n <- xValues[[q]]
-    n_add <- xValues[[q]]+1
-    
-    v1 <- data_series[[n_sub+1]]
-    v2 <- data_series[[n+1]]
-    v3 <- data_series[[n_add+1]]
-    
-    s <- (h/3)*(v1+4*v2+v3)
-    
-    chl_series[[i]]$chl_total[n] = s
-  }
-  for(t in 2:length(xValues)){
-    m = xValues[[t]]
-    m_sub = xValues[[t]] - 2
-    
-    chl_series[[i]]$chl_cumsum[1] = chl_series[[i]]$chl_total[1]
-    
-    chl_series[[i]]$chl_cumsum[m] = chl_series[[i]]$chl_cumsum[m_sub] + chl_series[[i]]$chl_total[m]
-    
-  }
-  if(nn %% 2 == 0){ #if length is even, add that last sum
-    
-    chl_series[[i]]$chl_cumsum[nn-1] = chl_series[[i]]$chl_cumsum[nn-3] + chl_series[[i]]$chl_total[nn-1]
-  }
   for(c in 2:length(chl_series[[i]]$chl_a)){
     chl_series[[i]]$delta_chl[c] = chl_series[[i]]$chl_a[c] - chl_series[[i]]$chl_a[c-1]
   }
 }
 
-# bloom end date
 
 for(i in 1:length(chl_series)){ #for each replicate in each treatment...
   
@@ -258,6 +214,7 @@ for(i in 1:length(chl_long_rep_summary$treatment_long)){
   }
 }
 
+# If experiment ended before bloom did, just take last day for 'bloom end'
 experiments_duration = aggregate(nday ~ rep_treatment + treatment_long + replicate,
                                  FUN = max,
                                  data = subset(chl_all_long, is.na(chl_all_long$chl_a) == FALSE))
@@ -265,43 +222,160 @@ experiments_duration = aggregate(nday ~ rep_treatment + treatment_long + replica
 for(i in 1:length(chl_long_rep_summary$treatment_long)){
   for(l in 1:length(experiments_duration$treatment_long)){
     if(is.na(chl_long_rep_summary$bloom_end_nday[i]) == TRUE & 
-       chl_long_rep_summary$treatment_long[i] == bloom_ends$treatment_long[l] & 
-       chl_long_rep_summary$replicate[i] == bloom_ends$replicate[l]){
-      chl_long_rep_summary$bloom_end_nday[i] = experiments_duration$nday[l] + 1
+       chl_long_rep_summary$treatment_long[i] == experiments_duration$treatment_long[l] & 
+       chl_long_rep_summary$replicate[i] == experiments_duration$replicate[l]){
+      chl_long_rep_summary$bloom_end_nday[i] = experiments_duration$nday[l]
     }
   }
 }
 
-chl_all_long_noNA = chl_all_long[,-6]
-chl_all_long_noNA = subset(chl_all_long_noNA, 
-                           is.na(chl_all_long_noNA$chl_cumsum) == FALSE)
+# now, take cumulative chl-a up to end of first bloom + total
 
-chl_agg_noNA = aggregate(chl_cumsum ~ treatment_long + nday + Date + Jday + treatment,
-                         FUN = mean,
-                         data = chl_all_long_noNA)
-chl_agg_noNA$cumsum_SE = aggregate(chl_cumsum ~ treatment_long + nday + Date + Jday + treatment,
-                         FUN = st.err,
-                         data = chl_all_long_noNA)$chl_cumsum
+chl_long_rep_summary$bloom_1_total_chl = NA
+chl_long_rep_summary$total_chl = NA
 
-ggplot(chl_agg_noNA, 
-       aes(x=nday,y=chl_cumsum,col=treatment_long)) + 
-  geom_point() + geom_line() + 
-  geom_errorbar(aes(ymin = (chl_cumsum - cumsum_SE),
-                    ymax = (chl_cumsum + cumsum_SE))) +
-  theme_bw() + ylim(0,300)
+chl_all_long$chl_total = NA
+chl_all_long$chl_cumsum = NA
 
-chl_totals = aggregate(chl_cumsum ~ treatment_long + treatment,
-                       data = chl_agg_noNA)
+chl_series = split(chl_all_long,chl_all_long$rep_treatment)
+
+for(i in 1:length(chl_series)){ #for each replicate in each treatment...
+  for(r in 1:length(chl_long_rep_summary$treatment_long)){
+    if(chl_long_rep_summary$treatment_long[r] == chl_series[[i]]$treatment_long[1] & 
+       chl_long_rep_summary$replicate[r] == chl_series[[i]]$replicate[1]){
+      firstbloom_df = subset(chl_series[[i]], chl_series[[i]]$nday <= chl_long_rep_summary$bloom_end_nday[r])
+      }
+    }
+  
+  data_series = na.approx(chl_series[[i]]$chl_a, na.rm = FALSE) #interpolate NA's
+  
+  nn = length(chl_series[[i]]$chl_a) #check the length of the series
+  nn_mini = length(firstbloom_df$chl_a)
+  
+  if(nn %% 2 == 0){ #if length is even, then shave off last point + use trapez rule
+    n = nn-2
+    
+    ss = (chl_series[[i]]$chl_a[nn-1] + chl_series[[i]]$chl_a[nn]) / 2
+    
+    chl_series[[i]]$chl_total[nn] = ss
+  }
+#  if(nn_mini %% 2 == 0){ #if length of subset is even, then use trapez rule for last point
+#    
+#    sss = (firstbloom_df$chl_a[nn_mini-1] + chl_series[[i]]$chl_a[nn_mini]) / 2
+#    
+#    chl_series[[i]]$chl_total[nn_mini-1] = sss
+#  }
+  if(nn %% 2 != 0){ #if length is odd, include it all
+    l = nn-1
+  }
+  
+  h=1 # defaulting to Simpson's 1/3 rule
+  xValues = seq(from=1, to=l, by=2) #step size of 2
+  
+  for(q in 1:length(xValues)){
+    n_sub <- xValues[[q]]-1
+    n <- xValues[[q]]
+    n_add <- xValues[[q]]+1
+    
+    v1 <- data_series[[n_sub+1]]
+    v2 <- data_series[[n+1]]
+    v3 <- data_series[[n_add+1]]
+    
+    s <- (h/3)*(v1+4*v2+v3)
+    
+    chl_series[[i]]$chl_total[n+1] = s
+  }
+  for(t in 2:length(xValues)){
+    m = xValues[[t]] +1
+    m_sub = xValues[[t]] - 1
+    
+    chl_series[[i]]$chl_cumsum[2] = chl_series[[i]]$chl_total[2]
+    
+    chl_series[[i]]$chl_cumsum[m] = chl_series[[i]]$chl_cumsum[m_sub] + chl_series[[i]]$chl_total[m]
+    
+  }
+  if(nn %% 2 == 0){ #if length is even, add that last sum
+    
+    chl_series[[i]]$chl_cumsum[nn] = chl_series[[i]]$chl_cumsum[nn-2] + chl_series[[i]]$chl_total[nn]
+  }
+}
+
+for(i in 1:length(chl_series)){
+  
+  chl_series[[i]]$chl_totals_noNA = na.approx(chl_series[[i]]$chl_cumsum,na.rm = FALSE)
+  
+  for(r in 1:length(chl_long_rep_summary$replicate)){
+    if(chl_series[[i]]$treatment_long[1] == chl_long_rep_summary$treatment_long[r] & 
+       chl_series[[i]]$replicate[1] == chl_long_rep_summary$replicate[r]){
+      
+      bloom_1_df = subset(chl_series[[i]], chl_series[[i]]$nday <= chl_long_rep_summary$bloom_end_nday[r])
+      
+      chl_long_rep_summary$bloom_1_total_chl[r] = max(na.omit(bloom_1_df$chl_totals_noNA))
+      chl_long_rep_summary$total_chl[r] = max(na.omit(chl_series[[i]]$chl_totals_noNA))
+    }
+  }
+}
+
+chl_all_long = unsplit(chl_series,chl_all_long$rep_treatment)
+
+chl_long_summary$end_nday = NA
+chl_long_summary$end_nday_SE = NA
+chl_long_summary$bloom1_totalchl = NA
+chl_long_summary$bloom1_totalchl_SE = NA
+chl_long_summary$totalchl = NA
+chl_long_summary$totalchl_SE = NA
+
+chl_long_summary = chl_long_summary[order(chl_long_summary$treatment_long),]
+chl_long_rep_summary = chl_long_rep_summary[order(chl_long_rep_summary$treatment_long),]
+
+
+chl_long_summary$end_nday = aggregate(bloom_end_nday ~ treatment_long,
+                                      FUN = mean,
+                                      data = chl_long_rep_summary)$bloom_end_nday
+chl_long_summary$end_nday_SE = aggregate(bloom_end_nday ~ treatment_long,
+                                      FUN = st.err,
+                                      data = chl_long_rep_summary)$bloom_end_nday
+
+chl_long_summary$bloom1_totalchl = aggregate(bloom_1_total_chl ~ treatment_long,
+                                      FUN = mean,
+                                      data = chl_long_rep_summary)$bloom_1_total_chl
+chl_long_summary$bloom1_totalchl_SE = aggregate(bloom_1_total_chl ~ treatment_long,
+                                         FUN = st.err,
+                                         data = chl_long_rep_summary)$bloom_1_total_chl
+
+chl_long_summary$totalchl = aggregate(total_chl ~ treatment_long,
+                                      FUN = mean,
+                                      data = chl_long_rep_summary)$total_chl
+chl_long_summary$totalchl_SE = aggregate(total_chl ~ treatment_long,
+                                         FUN = st.err,
+                                         data = chl_long_rep_summary)$total_chl
+
+chl_long_rep_summary$experiment = NA
+for(i in 1:length(chl_long_rep_summary$experiment)){
+  chl_long_rep_summary$experiment[i] = paste(strsplit(chl_long_rep_summary$treatment_long[i],"_")[[1]][1],strsplit(chl_long_rep_summary$treatment_long[i],"_")[[1]][2],sep="_")
+  
+}
+
+ggplot(data = chl_long_rep_summary, aes(x=experiment,y=chl_max_nday,col=treatment)) + 
+  geom_boxplot() + theme_bw()
 
 
 
 
 
 
+## Delete code chunk below or put it (back) where it goes
 
-
-
-
+for(i in 1:length(chl_long_rep_summary$treatment_long)){
+  for(l in 1:length(chl_all_long$treatment_long)){
+    if(chl_long_rep_summary$treatment_long[i] == chl_all_long$treatment_long[l] & 
+       chl_long_rep_summary$replicate[i] == chl_all_long$replicate[l] & 
+       chl_long_rep_summary$bloom_end_nday[i] == chl_all_long$nday[l]){
+      
+      chl_long_rep_summary$bloom_end_nday[i] = experiments_duration$nday[l]
+    }
+  }
+}
 
 
 
