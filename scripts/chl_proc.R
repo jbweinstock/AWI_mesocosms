@@ -1,6 +1,6 @@
 ## Combine + synthesize Food Webs group mesocosm data
 ## Date created: 07 Apr 2026
-## Date updated: 08 Apr 2026
+## Date updated: 09 Apr 2026
 
 library(ggplot2)
 library(zoo) #na.approx
@@ -133,22 +133,23 @@ chl_long_summary$max_day_SE = aggregate(chl_max_nday ~ treatment_long + treatmen
 chl_all_long$rep_treatment = paste(chl_all_long$replicate, chl_all_long$treatment_long, sep="_")
 
 
-## Bloom summary stats... total chl + cumulative total
+## Bloom summary stats... total chl + cumulative total + bloom end
 
 chl_all_long$chl_total = NA
 chl_all_long$chl_cumsum = NA
+chl_all_long$delta_chl = NA
+chl_all_long$over = NA
 chl_series = split(chl_all_long,chl_all_long$rep_treatment)
 
 for(i in 1:length(chl_series)){ #for each replicate in each treatment...
   nn = length(chl_series[[i]]$chl_a) #check the length of the series
-    if(nn %% 2 == 0){ #if length is even, then shave off last point
+  if(nn %% 2 == 0){ #if length is even, then shave off last point
     n = nn-2
     
     ss = (chl_series[[i]]$chl_a[nn-1] + chl_series[[i]]$chl_a[chl_series[[i]]$chl_a[nn]]) / 2
     
     chl_series[[i]]$chl_total[nn-1] = ss
-    
-  }
+    }
   else if(nn %% 2 != 0){ #if length is odd, include it all
     n = nn-1
   }
@@ -171,7 +172,6 @@ for(i in 1:length(chl_series)){ #for each replicate in each treatment...
     
     chl_series[[i]]$chl_total[n] = s
   }
-  
   for(t in 2:length(xValues)){
     m = xValues[[t]]
     m_sub = xValues[[t]] - 2
@@ -179,14 +179,98 @@ for(i in 1:length(chl_series)){ #for each replicate in each treatment...
     chl_series[[i]]$chl_cumsum[1] = chl_series[[i]]$chl_total[1]
     
     chl_series[[i]]$chl_cumsum[m] = chl_series[[i]]$chl_cumsum[m_sub] + chl_series[[i]]$chl_total[m]
+    
   }
   if(nn %% 2 == 0){ #if length is even, add that last sum
     
     chl_series[[i]]$chl_cumsum[nn-1] = chl_series[[i]]$chl_cumsum[nn-3] + chl_series[[i]]$chl_total[nn-1]
   }
+  for(c in 2:length(chl_series[[i]]$chl_a)){
+    chl_series[[i]]$delta_chl[c] = chl_series[[i]]$chl_a[c] - chl_series[[i]]$chl_a[c-1]
+  }
 }
 
+# bloom end date
+
+for(i in 1:length(chl_series)){ #for each replicate in each treatment...
+  
+  bloom_start_val = min(na.omit(chl_series[[i]]$chl_a[1:2]))
+  
+  bloom_end_val = ifelse(chl_series[[i]]$season[1] == "Spring",
+         yes = bloom_start_val * 1.6, #use 60% buffer for Spring mesocosms
+         no = bloom_start_val * 2) #use 100# buffer for Summer mesocosms
+  
+  delta_upper = 5
+  delta_lower = -5
+  
+  for(l in 5:length(chl_series[[i]]$chl_a)){ #look at each chl-a value...
+    
+    if(is.na(chl_series[[i]]$chl_a[l]) == FALSE &
+       is.na(chl_series[[i]]$delta_chl[l]) == FALSE &
+       chl_series[[i]]$chl_a[l] <= bloom_end_val){
+      
+      if(chl_series[[i]]$delta_chl[l] <= delta_upper | 
+         chl_series[[i]]$delta_chl[l] >= delta_lower){
+        
+        chl_series[[i]]$over[l] = TRUE
+      }
+    }
+    if(is.na(chl_series[[i]]$chl_a[l]) == TRUE |
+       is.na(chl_series[[i]]$delta_chl[l]) == TRUE |
+       chl_series[[i]]$chl_a[l] > bloom_end_val |
+       chl_series[[i]]$delta_chl[l] > delta_upper |
+       chl_series[[i]]$delta_chl[l] < delta_lower){
+      chl_series[[i]]$over[l] = FALSE
+    }
+  }
+  
+}
+
+
 chl_all_long = unsplit(chl_series,chl_all_long$rep_treatment)
+
+chl_all_long = chl_all_long[order(chl_all_long$treatment_long),]
+
+chl_all_long$order = paste(chl_all_long$treatment_long,chl_all_long$replicate,sep = "_")
+
+ggplot(data = chl_all_long) + 
+  geom_point(aes(x=nday, y=chl_a, col=treatment)) + 
+  geom_line(aes(x=nday, y=chl_a, col=treatment)) + 
+  geom_vline(data = subset(chl_all_long, chl_all_long$over == TRUE),
+             aes(xintercept = nday)) + 
+  theme_bw() + 
+  facet_wrap(vars(order), nrow=6, scales = "free",
+             axes = "all", axis.labels = "all_y")
+
+
+bloom_ends = subset(chl_all_long, chl_all_long$over == TRUE)
+bloom_ends = aggregate(nday ~ rep_treatment + treatment + replicate + treatment_long + season,
+                       FUN = min,
+                       data = bloom_ends)
+
+chl_long_rep_summary$bloom_end_nday = NA
+for(i in 1:length(chl_long_rep_summary$treatment_long)){
+  for(l in 1:length(bloom_ends$treatment_long)){
+    if(chl_long_rep_summary$treatment_long[i] == bloom_ends$treatment_long[l] & 
+       chl_long_rep_summary$replicate[i] == bloom_ends$replicate[l]){
+      chl_long_rep_summary$bloom_end_nday[i] = bloom_ends$nday[l]
+    }
+  }
+}
+
+experiments_duration = aggregate(nday ~ rep_treatment + treatment_long + replicate,
+                                 FUN = max,
+                                 data = subset(chl_all_long, is.na(chl_all_long$chl_a) == FALSE))
+
+for(i in 1:length(chl_long_rep_summary$treatment_long)){
+  for(l in 1:length(experiments_duration$treatment_long)){
+    if(is.na(chl_long_rep_summary$bloom_end_nday[i]) == TRUE & 
+       chl_long_rep_summary$treatment_long[i] == bloom_ends$treatment_long[l] & 
+       chl_long_rep_summary$replicate[i] == bloom_ends$replicate[l]){
+      chl_long_rep_summary$bloom_end_nday[i] = experiments_duration$nday[l] + 1
+    }
+  }
+}
 
 chl_all_long_noNA = chl_all_long[,-6]
 chl_all_long_noNA = subset(chl_all_long_noNA, 
@@ -204,8 +288,10 @@ ggplot(chl_agg_noNA,
   geom_point() + geom_line() + 
   geom_errorbar(aes(ymin = (chl_cumsum - cumsum_SE),
                     ymax = (chl_cumsum + cumsum_SE))) +
-  theme_bw()
+  theme_bw() + ylim(0,300)
 
+chl_totals = aggregate(chl_cumsum ~ treatment_long + treatment,
+                       data = chl_agg_noNA)
 
 
 
