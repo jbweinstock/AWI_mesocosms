@@ -1,6 +1,6 @@
 ## Combine + synthesize Food Webs group mesocosm data
 ## Date created: 07 Apr 2026
-## Date updated: 09 Apr 2026
+## Date updated: 13 Apr 2026
 
 library(ggplot2)
 library(zoo) #na.approx
@@ -356,26 +356,16 @@ for(i in 1:length(chl_long_rep_summary$experiment)){
   
 }
 
-ggplot(data = chl_long_rep_summary, aes(x=experiment,y=chl_max_nday,col=treatment)) + 
-  geom_boxplot() + theme_bw()
+ggplot(data = chl_long_rep_summary, aes(x=experiment,y=chl_a,fill=treatment)) +
+  scale_fill_viridis_d(option="H",alpha=0.7) +
+  geom_boxplot() + theme_bw() +
+  ggtitle("Peak Chl-a value")
 
 
 
 
 
 
-## Delete code chunk below or put it (back) where it goes
-
-for(i in 1:length(chl_long_rep_summary$treatment_long)){
-  for(l in 1:length(chl_all_long$treatment_long)){
-    if(chl_long_rep_summary$treatment_long[i] == chl_all_long$treatment_long[l] & 
-       chl_long_rep_summary$replicate[i] == chl_all_long$replicate[l] & 
-       chl_long_rep_summary$bloom_end_nday[i] == chl_all_long$nday[l]){
-      
-      chl_long_rep_summary$bloom_end_nday[i] = experiments_duration$nday[l]
-    }
-  }
-}
 
 
 
