@@ -1,6 +1,6 @@
 ## Combine + synthesize Food Webs group mesocosm data
 ## Date created: 05 May 2026
-## Date updated: 05 May 2026
+## Date updated: 06 May 2026
 
 library(ggplot2)
 library(zoo) #na.approx
@@ -9,11 +9,18 @@ library(tidyr)
 
 # load data
 phytos_2019_spring = read.csv("mesocosm_data/phytos_2019_ugC.csv")
+zoos_2019_spring = read.csv("mesocosm_data/zoos_2019_ugC.csv")
+zoos_2019_spring = subset(zoos_2019_spring, 
+                          zoos_2019_spring$Scenario == "Ambient" |
+                            zoos_2019_spring$Scenario == "ERCP 8.5")
+
 
 phytos_2019_spring$biomass = rowSums(phytos_2019_spring[,4:95])
+zoos_2019_spring$biomass = rowSums(zoos_2019_spring[,4:20])
 
 phytos_2019_spring_pres = phytos_2019_spring
 
+# convert (copy of) data to presence/absence
 for(i in 1:length(phytos_2019_spring_pres$Day)){
   for(s in 4:length(phytos_2019_spring_pres)){
     phytos_2019_spring_pres[i,s] = ifelse(
@@ -59,8 +66,8 @@ for(i in 1:length(phytos_2019_spring_NAs$Day)){
 }
 phytos_2019_spring_NAs$vegan_shannon = NA
 for(i in 1:length(phytos_2019_spring_NAs$Day)){ #for every replicate on every sample day...
-  all_spp = gather(phytos_2019_spring_NAs[i,4:95])
-  present_spp = na.omit(all_spp$value)
+  all_spp = gather(phytos_2019_spring_NAs[i,4:95]) #turn data into long format
+  present_spp = na.omit(all_spp$value) # remove NA values (aka absent taxa)
   phytos_2019_spring_NAs$vegan_shannon[i] = diversity(present_spp, index="shannon")
 } # ^ calculate evenness according to Lewandowska et al. 2014
 
