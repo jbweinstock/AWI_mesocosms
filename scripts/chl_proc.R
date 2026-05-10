@@ -1,6 +1,6 @@
 ## Combine + synthesize Food Webs group mesocosm data
 ## Date created: 07 Apr 2026
-## Date updated: 13 Apr 2026
+## Date updated: 10 May 2026
 
 library(ggplot2)
 library(zoo) #na.approx
@@ -71,6 +71,30 @@ ggplot(data = chl_all, aes(x=nday, y=chl_a, shape=treatment_long)) +
   #geom_errorbar(aes(ymin = (chl_a - SE),
   #                  ymax = (chl_a + SE))) +
   theme_bw()
+
+chl_2018 = ggplot(data = subset(chl_all,
+                                chl_all$treatment_long=="Summer_2018_Ambient" |
+                                  chl_all$treatment_long=="Summer_2018_ERCP8.5"), 
+                  aes(x=nday, y=chl_a, shape=treatment_long)) + 
+  geom_point(aes(col = treatment)) + geom_line(aes(col = treatment)) + 
+  theme_bw() + 
+  scale_colour_manual(values = c("cornflowerblue", "red4"))
+
+chl_2019 = ggplot(data = subset(chl_all,
+                                chl_all$treatment_long=="Spring_2019_Ambient" |
+                                  chl_all$treatment_long=="Spring_2019_ERCP8.5"), 
+                  aes(x=nday, y=chl_a, shape=treatment_long)) + 
+  geom_point(aes(col = treatment)) + geom_line(aes(col = treatment)) + 
+  theme_bw() + 
+  scale_colour_manual(values = c("cornflowerblue", "red4"))
+
+chl_2021 = ggplot(data = subset(chl_all,
+                                chl_all$treatment_long=="Summer_2021_Ambient" |
+                                  chl_all$treatment_long=="Summer_2021_ERCP8.5"), 
+                  aes(x=nday, y=chl_a, shape=treatment_long)) + 
+  geom_point(aes(col = treatment)) + geom_line(aes(col = treatment)) + 
+  theme_bw() + 
+  scale_colour_manual(values = c("cornflowerblue", "red4"))
 
 
 ## Bloom summary stats... peak value + timing + SE's
